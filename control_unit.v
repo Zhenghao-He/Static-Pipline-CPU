@@ -37,7 +37,7 @@ module control_unit(
 	reg [31:0] rf[31:0];//¼Ä´æÆ÷¶Ñ
 	reg [2:0]i;
     reg z;
-    reg [3:0] stall;
+    wire branch_flag;
 	//************ IF ************//
 	always @(posedge clock or posedge reset)
 		begin
@@ -47,48 +47,38 @@ module control_unit(
 					id_ir <=`NOP;
 					if_ir <=`NOP;
 					pc <= 32'h0040_0000;
-					stall=0;
 				end
-			else if(stall!=3)
+			else
 				begin    
 				    
-//				   if(z&&if_instr[24]||!z&&if_instr[25])
-//					begin
-//						if(if_ir[15])begin
-//							pc=pc_reg+{14'b11_1111_1111_1111,if_ir[15:0],2'b00};
-//							last_inst_type=`FIRSTT;
-//							id_ir<=`NOP;
-//							ex_ir<=`NOP;
-//							mem_ir<=`NOP;
-//							wb_ir<=`NOP;
-							
-//						end
-//						else
-//						begin
-//							pc=pc_reg+{14'b00_0000_0000_0000,if_ir[15:0],2'b00};
-//							last_inst_type=`FIRSTT;
-//							id_ir=`NOP;
-//							ex_ir=`NOP;
-//							mem_ir=`NOP;
-//							wb_ir=pc_reg;
-//						end
-//					end
-				    
-				    
-					if (if_instr[0]||if_instr[2]||if_instr[8]||if_instr[17]||if_instr[11]||if_instr[24]||if_instr[25])
+				   if(branch_flag)
+					begin
+						if(wb_instr[25]&&!zero)begin
+							pc=pc+{14'b11_1111_1111_1111,wb_ir[15:0],2'b00};
+						end
+						else if(wb_instr[24]&&zero)
+						begin
+							pc=pc+{14'b00_0000_0000_0000,wb_ir[15:0],2'b00};
+						end
+					end
+
+					if (if_instr[0]||if_instr[2]||if_instr[8]||if_instr[17]||if_instr[11])
 					begin
 						current_inst_type=`FOURT1;
 					end
-				    else if(if_instr[23])begin
+					else if(if_instr[23])begin
 						current_inst_type=`FOURT2;
+					end
+				    else if(if_instr[24]||if_instr[25])begin
+						current_inst_type=`FOURT3;
 					end
 				    else if(if_instr[22])begin
 						current_inst_type=`FIVET;
 					end
 					else begin
-						current_inst_type=`TWOT;
+						current_inst_type=`FIRSTT;
 					end
-					if(current_inst_type==last_inst_type||last_inst_type==`FIRSTT)begin
+					if(current_inst_type==last_inst_type||last_inst_type==`FIRSTT||if_instr[29])begin
 						i=0;
 						id_ir <= instr;
 						if(if_instr[29])
@@ -100,13 +90,13 @@ module control_unit(
 						begin
 							pc = pc + 4;	
 						end
-						
+						last_inst_type=current_inst_type;
 					end
-					else if(last_inst_type==`FOURT1||last_inst_type==`FOURT2)
+					else if(last_inst_type==`FOURT1||last_inst_type==`FOURT2||last_inst_type==`FOURT3)
 					begin
 						i=i+1;
 						id_ir <=`NOP;
-						if(i>=4)
+						if(i>=3)
 						begin
 							i=0;
 							id_ir =instr;
@@ -117,7 +107,7 @@ module control_unit(
 					begin
 						i=i+1;
 						id_ir =`NOP;
-						if(i>=5)
+						if(i>=4)
 						begin
 							i=0;
 							id_ir =instr;
@@ -125,12 +115,10 @@ module control_unit(
 						end
 					end
 					
-					if(if_instr[24]||if_instr[25])
-					begin
-					   pc_reg=pc;
-					   stall=stall+1;
-                   end
+
 				end
+				
+
 		end
 		
 		reg [31:0]test_rs,test_rs2;
@@ -144,12 +132,12 @@ module control_unit(
 					B <= 0;
 				end
 			
-			else if(stall!=3)
+			else 
 				begin
 //				test_rs=rf[id_ir[25:21]];
                     if(id_instr[24]||id_instr[25])
 					begin
-					   stall=stall+1;
+					
                    end
                    
 					ex_ir <= id_ir;
@@ -210,11 +198,11 @@ module control_unit(
 
 				end
 			
-			else if(stall!=3)
+			else
 				begin 
                     if(ex_instr[24]||ex_instr[25])
 					begin
-					   stall=stall+1;
+
                    end
 				
 					 aluc[3] = ex_instr[9] || ex_instr[10] || ex_instr[11] || ex_instr[12] || ex_instr[13] || ex_instr[14] || ex_instr[15] || ex_instr[26] || ex_instr[27] || ex_instr[28];
@@ -307,8 +295,6 @@ module control_unit(
 					//--------------------
 					if(ex_instr[22]||ex_instr[23])
 						mem_ir <= ex_ir;
-//					else if(ex_instr[24]||ex_instr[25])
-//					   if_ir=ex_ir;
 					else
 						wb_ir <= ex_ir;
 					
@@ -369,6 +355,7 @@ module control_unit(
 		end
 			
 	//************ WB ************//
+	assign branch_flag=wb_instr[24]||wb_instr[25];
 	always @(posedge clock or posedge reset)
 		begin
 			if (reset)
@@ -428,31 +415,7 @@ module control_unit(
 						rf[wb_ir[15:11]] <= res;
 					else if(wb_instr[17]||wb_instr[22])
 						rf[wb_ir[20:16]] <= res;
-					else if(z&&wb_instr[24]||!z&&wb_instr[25])
-					begin
-					
-						if(wb_ir[15])begin
-							pc=pc_reg+{14'b11_1111_1111_1111,wb_ir[15:0],2'b00};
-							last_inst_type=`FIRSTT;
-							id_ir<=`NOP;
-							ex_ir<=`NOP;
-							mem_ir<=`NOP;
-							wb_ir<=`NOP;
-							stall=0;
-						end
-						else
-						begin
-							pc=pc_reg+{14'b00_0000_0000_0000,wb_ir[15:0],2'b00};
-							last_inst_type=`FIRSTT;
-							id_ir<=`NOP;
-							ex_ir<=`NOP;
-							mem_ir<=`NOP;
-							wb_ir<=`NOP;
-							stall=0;
-						end
-						
-					end
-                    stall=0;    
+
 				end
 		end
 

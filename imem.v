@@ -25,7 +25,7 @@ module imem(
    output [31:0]meminst
 );
 
-////    integer i;
+//    integer i;
 //    wire[31:0] myaddr=(addr-32'h00400000);
 //   dist_mem_gen_0 uut(.a(myaddr[12:2]),.spo(meminst));
 

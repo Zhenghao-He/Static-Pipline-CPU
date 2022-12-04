@@ -5,7 +5,7 @@
 `define FIVET 3'd2
 `define TWOT 3'd3
 `define FIRSTT 3'd4
-
+`define FOURT3 3'd5
 //`define ADD 12'b000000100000  
 
 //`define SUB 12'b000000100010 
